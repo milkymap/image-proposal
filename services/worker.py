@@ -56,8 +56,6 @@ class ZMQWorker(ABC):
                     self.dealer_socket.send_multipart([b'', b'FREE', b'', b''])
                     is_free = False 
 
-                logger.info(f'{self.worker_id} is running and is linked with the switch {self.switch_id}')
-
                 if self.dealer_socket.poll(timeout=self.timeout) == zmq.POLLIN:
                     _, topic, client_id, incoming_req = self.dealer_socket.recv_multipart()
                     status, message_data = self.__consume_message(topic, incoming_req)

@@ -11,11 +11,25 @@ from typing import List, Dict, Tuple, Any, Type
 
 from log import logger 
 
+import signal 
 
 class ZMQRunner:
     def __init__(self):
         self.services:List[Tuple[str, Type[ZMQWorker], str, Dict[str, Any]], int] = []
         self.topics_acc:List[List[str]] = []
+
+    def __handle_termination_signal(self, signal_num:int, frame:str):
+        logger.warning(f'runner has received the SIGTERM signal')
+        signal.raise_signal(signal.SIGINT)
+        logger.info('runner has raised the SIGINT')
+
+    def __initialize_signal_handler(self):
+        signal.signal(
+            signal.SIGTERM, 
+            self.__handle_termination_signal
+        )
+        logger.info(f'runner has initialized the SIGNAL Handler')
+
 
     def add_service(self, name:str, topics:List[str], builder:Type[ZMQWorker], kwargs:Dict[str, Any], nb_workers:int):
         if not issubclass(builder, ZMQWorker):
@@ -47,11 +61,17 @@ class ZMQRunner:
                 if any(process_states):
                     keep_loop = False 
             except KeyboardInterrupt:
+                logger.warning('runner will quit its loop')
                 for prs in processes:
-                    prs.join()
+                    if prs.exitcode is None:
+                        prs.terminate()
+                        prs.join()
+                keep_loop = False 
             except Exception as e:
+                logger.error(e)
                 keep_loop = False 
         
+        logger.info('runner is waiting for worker to exit')
         for prs in processes:
             if prs.exitcode is None:
                 prs.terminate()
@@ -67,6 +87,7 @@ class ZMQRunner:
             worker.loop()
 
     def __enter__(self):
+        self.__initialize_signal_handler()
         return self 
     
     def __exit__(self, exc_type, exc_value, traceback):

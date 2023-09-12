@@ -32,9 +32,8 @@ from starter import launch_runner, launch_server
 @click.option('--protocol_buffers', envvar='PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION', required=True, type=click.Choice(['python']))
 def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, path2index_schema:str ,nlp_model_name:str, img_model_name:str, nb_nlp_workers:int, nb_img_workers:int ,chunk_size:int, cache_folder:str, protocol_buffers:str):
     device = 'cuda:0' if th.cuda.is_available() else 'cpu'
-    if device == 'cuda:0':
-        th.multiprocessing.set_start_method('spawn')
-        logger.info('multiprocessing => start_method set to spawn for cuda')
+    th.multiprocessing.set_start_method('spawn')
+    logger.info('multiprocessing => start_method set to spawn for cuda')
 
     runner_process = mp.Process(
         target=launch_runner,
@@ -82,16 +81,20 @@ def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, 
     while keep_monitoring:
         try:
             if any([ prs.exitcode is not None for prs in processes_tracker ]):
+                logger.warning('launher has detected that one of the processes has terminated its execution')
                 keep_monitoring = False 
             sleep(1)
         except KeyboardInterrupt:
             for prs in processes_tracker:
                 prs.join()  # wait for prs to get the SIGINT signal and to exit
+            keep_monitoring = False 
         except Exception as e:
             logger.error(e)
+            keep_monitoring = False 
     
+    logger.warning('launcher is waiting for process to terminate')
     for prs in processes_tracker:
-        if prs.exitcode is not None:
+        if prs.exitcode is None:
             prs.terminate()  # send SIGTERM to prs 
             prs.join()  # wait for prs to receive the SIGTERM and to exit 
 

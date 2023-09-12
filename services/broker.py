@@ -55,15 +55,13 @@ class ZMQBroker:
                 if router_socket in map_socket2values:
                     if map_socket2values[router_socket] == zmq.POLLIN: 
                         client_id, _, topic, incoming_req = router_socket.recv_multipart()
-                        logger.info(f'source has received message from {client_id} with the topic {topic}')
-                    
+                        
                         publisher_socket.send(topic, flags=zmq.SNDMORE)
                         publisher_socket.send_multipart([client_id, incoming_req])
 
                 if pull_socket in map_socket2values:
                     if map_socket2values[pull_socket] == zmq.POLLIN:
                         target_client_id, worker_response = pull_socket.recv_multipart()
-                        logger.info(f'source has received the response for the client {target_client_id}')
                         router_socket.send_multipart([target_client_id, b'', worker_response])
             except Exception as e:
                 logger.error(e) 
@@ -108,7 +106,6 @@ class ZMQBroker:
                         keep_loop = False 
                     shared_mutex.release()
 
-                logger.info(f'switch {switch_id} is running with {len(workers)} workers')
                 map_socket2values = dict(poller.poll(timeout=self.timeout))
                 if router_socket in map_socket2values:
                     if map_socket2values[router_socket] == zmq.POLLIN:
@@ -175,7 +172,8 @@ class ZMQBroker:
                 keep_loop = False 
         
         with shared_mutex:
-            signal_tracker.set()
+            if not signal_tracker.is_set():
+                signal_tracker.set()
 
         source_thread.join()
         for thread_ in switch_threads:

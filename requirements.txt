@@ -1,0 +1,14 @@
+pyzmq
+click 
+
+fastapi
+aiofile
+python-multipart
+uvicorn
+
+elasticsearch[async]
+
+tiktoken
+protobuf
+python-dotenv
+sentence-transformers
