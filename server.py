@@ -18,7 +18,6 @@ from os import path
 from uuid import uuid4
 
 from glob import glob 
-from time import sleep 
 
 from aiofile import async_open
 
@@ -40,11 +39,12 @@ import resource
 
 class APIServer:
     __PATH2MEMORIES = 'map_task_id2task_data.pkl'
-    def __init__(self, host:str, port:int, path2base_dir:str, number_opened_file_limit:int=8196):
+    def __init__(self, host:str, port:int, path2base_dir:str, number_opened_file_limit:int=8196, mounting_path:str="/"):
         self.host = host 
         self.port = port 
         self.path2base_dir = path2base_dir
         self.number_opened_file_limit = number_opened_file_limit
+        self.mounting_path = mounting_path
 
         soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
         if number_opened_file_limit > soft_limit and number_opened_file_limit < hard_limit:
@@ -181,7 +181,7 @@ class APIServer:
             }],
             'basic_auth':es_basic_auth
         }
-        self.config = uvicorn.Config(app=self.api, host=self.host, port=self.port)
+        self.config = uvicorn.Config(app=self.api, host=self.host, port=self.port, root_path=self.mounting_path)
         self.server = uvicorn.Server(self.config)
         await self.server.serve()
     
@@ -248,7 +248,6 @@ class APIServer:
                 }
             )
         except Exception as e:
-            error_message = e
             logger.error(e)
             raise HTTPException(
                 status_code=500,

@@ -8,12 +8,6 @@ from log import logger
 from dotenv import load_dotenv
 from time import sleep 
 
-
-"""
-python main.py --nlp_model_name Sahajtomar/french_semantic --img_model_name clip-ViT-L-14 --chunk_size 128 --timeout 1000 --nb_nlp_workers 1 --nb_img_workers 1
-
-"""
-
 import multiprocessing as mp 
 from starter import launch_runner, launch_server
 

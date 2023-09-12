@@ -13,9 +13,9 @@ docker build -t image-proposal:gpu -f Dockerfile.gpu .
         -v /path/to/base_dir/:/home/solver/base_dir \
         -e ES_HOST="elastic search hostname" \
         -e ES_PORT="elastic search port" \
-        -e ES_SCHEMA=https
-        -e ES_BASINC_AUTH=XXXXXXX \
-        -p 8000:8000 \
+        -e ES_SCHEME=https
+        -e ES_BASIC_AUTH=XXXXXXX \
+        -p host_port:8000 \
         image-proposal:gpu \ 
             --port 8000 
             --host '0.0.0.0' 
