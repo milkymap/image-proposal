@@ -14,6 +14,7 @@ from starter import launch_runner, launch_server
 @click.command()
 @click.option('--host', default='0.0.0.0')
 @click.option('--port', default=8000)
+@click.option('--mounting_path', type=str, default='/')
 @click.option('--path2base_dir', envvar='PATH2BASE_DIR', type=click.Path(exists=True, dir_okay=True, file_okay=False), required=True)
 
 @click.option('--es_host', type=str, envvar='ES_HOST', required=True)
@@ -29,7 +30,7 @@ from starter import launch_runner, launch_server
 @click.option('--chunk_size', type=int, default=128)
 @click.option('--cache_folder', envvar='TRANSFORMERS_CACHE', required=True, type=click.Path(exists=True, file_okay=False))
 @click.option('--protocol_buffers', envvar='PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION', required=True, type=click.Choice(['python']))
-def main(host:str, port:int, path2base_dir:str, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, path2index_schema:str ,nlp_model_name:str, img_model_name:str, nb_nlp_workers:int, nb_img_workers:int ,chunk_size:int, cache_folder:str, protocol_buffers:str):
+def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, path2index_schema:str ,nlp_model_name:str, img_model_name:str, nb_nlp_workers:int, nb_img_workers:int ,chunk_size:int, cache_folder:str, protocol_buffers:str):
     device = 'cuda:0' if th.cuda.is_available() else 'cpu'
     if device == 'cuda:0':
         th.multiprocessing.set_start_method('spawn')
@@ -53,6 +54,7 @@ def main(host:str, port:int, path2base_dir:str, es_host:str, es_port:int, es_sch
         kwargs = {
             'host': host,
             'port': port,
+            'mounting_path': mounting_path,
             'path2base_dir': path2base_dir,
             'es_host': es_host,
             'es_port': es_port,
