@@ -1,0 +1,50 @@
+{
+    "text_image_pair": {
+        "mappings": {
+            "properties": {
+                "id": {
+                    "type": "keyword"
+                },
+                "text": {
+                    "type": "text"
+                },
+                "text_vector": {
+                    "type": "dense_vector",
+                    "dims": "1024"
+                },
+                "image_vector": {
+                    "type": "dense_vector",
+                    "dims": "768"
+                }
+            }
+        },
+        "settings": {
+            "index": {
+                "number_of_shards": "1",
+                "number_of_replicas": "1"
+            }
+        }
+    },
+    "image": {
+        "mappings": {
+            "properties": {
+                "id": {
+                    "type": "keyword"
+                },
+                "dir_id": {
+                    "type": "keyword"
+                },
+                "vector": {
+                    "type": "dense_vector",
+                    "dims": "768"
+                }
+            }
+        },
+        "settings": {
+            "index": {
+                "number_of_shards": "1",
+                "number_of_replicas": "1"
+            }
+        }
+    } 
+}
