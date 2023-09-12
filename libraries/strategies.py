@@ -22,11 +22,9 @@ def load_transformers(model_name:str, cache_folder:str, device:str='cpu') -> Sen
 def split_text_into_chunks(text:str, chunk_size:int, tokenizer:tiktoken.Encoding) -> List[str]:
     tokens:List[int] = tokenizer.encode(text)
     nb_tokens = len(tokens)
-    nb_partitions = round(nb_tokens / chunk_size)
-
     accumulator:List[str] = []
-    for chunk_tokens in np.array_split(tokens, nb_partitions):
-        paragraph = tokenizer.decode(chunk_tokens) 
+    for cursor in range(0, nb_tokens, chunk_size):
+        paragraph = tokenizer.decode(tokens[cursor:cursor+chunk_size]) 
         accumulator.append(paragraph)
     
     return accumulator

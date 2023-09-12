@@ -20,6 +20,7 @@ class ZMQRunner:
     def add_service(self, name:str, topics:List[str], builder:Type[ZMQWorker], kwargs:Dict[str, Any], nb_workers:int):
         if not issubclass(builder, ZMQWorker):
             raise Exception(f'{builder} should be a subclass of ZMQWorker')
+        
         nb_services = len(self.services)
         switch_id = f'switch_{nb_services:03d}'
         self.topics_acc.append(topics)
@@ -50,7 +51,7 @@ class ZMQRunner:
                     prs.join()
             except Exception as e:
                 keep_loop = False 
-
+        
         for prs in processes:
             if prs.exitcode is None:
                 prs.terminate()

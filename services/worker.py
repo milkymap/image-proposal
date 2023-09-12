@@ -21,7 +21,7 @@ class ZMQWorker(ABC):
             self.__initialize_signal_handler()
 
         self.dealer_socket = self.ctx.socket(zmq.DEALER)
-        self.dealer_socket.connect(f'ipc://{self.switch_id}.ipc')
+        self.dealer_socket.connect(f'ipc:///tmp/{self.switch_id}.ipc')
 
     def __handle_termination_signal(self, signal_num:int, frame:str):
         logger.warning(f'{self.worker_id} has received the SIGTERM signal')

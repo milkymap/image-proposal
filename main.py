@@ -8,6 +8,9 @@ from log import logger
 
 from dotenv import load_dotenv
 
+"""
+python main.py --nlp_model_name Sahajtomar/french_semantic --img_model_name clip-ViT-L-14 --chunk_size 128 --timeout 1000 --nb_nlp_workers 1 --nb_img_workers 1
+"""
 
 @click.command()
 @click.option('--host', default='0.0.0.0')

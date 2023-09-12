@@ -84,7 +84,7 @@ class ZMQBroker:
         push_socket.connect(ZMQConfig.WORKER2BROKER_ADDRESS)
 
         router_socket = self.ctx.socket(zmq.ROUTER)
-        router_socket.bind(f'ipc://{switch_id}.ipc')
+        router_socket.bind(f'ipc:///tmp/{switch_id}.ipc')
 
         subscriber_socket = self.ctx.socket(zmq.SUB)
         subscriber_socket.connect(ZMQConfig.BROKER2WORKER_ADDRESS)

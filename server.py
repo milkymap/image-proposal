@@ -85,8 +85,13 @@ class APIServer:
             with open(APIServer.__PATH2MEMORIES, mode='rb') as fp:
                 self.map_task_id2task_status = pickle.loads(fp.read())
 
-        self.elasticsearch_client = AsyncElasticsearch(hosts=["http://localhost:9200"])  # use qdrant async 
-        print(await self.elasticsearch_client.info())
+        try:
+            self.elasticsearch_client = AsyncElasticsearch(**self.elasticsearch_config)  
+            es_info = await self.elasticsearch_client.info()
+            logger.info(es_info)
+        except Exception as e:
+            logger.error(e)
+            exit(-1)
 
         logger.info('server has started its execution')
 
@@ -97,7 +102,15 @@ class APIServer:
         self.ctx.term()
         logger.info('server has stopped its running loop')
 
-    async def loop(self):
+    async def loop(self, host:str, port:int=443, scheme:str='https', basic_auth:str=''):
+        self.elasticsearch_config = {
+            'hosts': [{
+                'host': host, 
+                'port': port,
+                'scheme': scheme
+            }],
+            'basic_auth': basic_auth
+        }
         self.config = uvicorn.Config(app=self.api, host=self.host, port=self.port)
         self.server = uvicorn.Server(self.config)
         await self.server.serve()
