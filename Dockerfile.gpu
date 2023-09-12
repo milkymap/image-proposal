@@ -30,6 +30,7 @@ COPY . ./
 # env variables
 ENV TRANSFORMERS_CACHE=/home/solver/transformers_cache
 ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python 
+ENV PATH2BASE_DIR="/home/solver/base_dir"
 
 
 # entrypoint 
