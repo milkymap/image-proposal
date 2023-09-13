@@ -25,7 +25,7 @@ from fastapi import FastAPI
 from fastapi import BackgroundTasks, HTTPException, UploadFile, Form, File 
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from apischema import ImageRecommendation, TaskStatus, MonitorContent, MonitorResponse, IndexCreateDeletion, VectorizeImageCorpus
+from apischema import ImageRecommendation, TaskStatus, MonitorContent, MonitorResponse, VectorizeImageCorpus
 from config import ZMQConfig
 from log import logger 
 
@@ -39,10 +39,14 @@ import resource
 
 class APIServer:
     __PATH2MEMORIES = 'map_task_id2task_data.pkl'
-    def __init__(self, host:str, port:int, path2base_dir:str, number_opened_file_limit:int=8196, mounting_path:str="/"):
+    def __init__(self, host:str, port:int, path2base_dir:str, index_name:str, reset_index:bool=False, number_opened_file_limit:int=8196, mounting_path:str="/"):
         self.host = host 
         self.port = port 
+
+        self.index_name = index_name
+        self.reset_index = reset_index
         self.path2base_dir = path2base_dir
+
         self.number_opened_file_limit = number_opened_file_limit
         self.mounting_path = mounting_path
 
@@ -93,13 +97,11 @@ class APIServer:
         self.api.add_api_route('/heartbit', self.handle_heartbit)
         self.api.add_api_route('/get_image', self.handle_get_image)
         
-        self.api.add_api_route('/create_index', self.handle_index_creation, methods=['POST'])
-        self.api.add_api_route('/delete_index', self.handle_index_deletion, methods=['POST'])
-        self.api.add_api_route('/inspect_index', self.handle_index_inspection)
+        self.api.add_api_route('/inspect_index', self.handle_index_inspection, methods=['GET'])
 
-        self.api.add_api_route('/add_text_image', self.handle_vectorize_text_image, methods=['POST'])
+        self.api.add_api_route('/add_knowledge', self.handle_vectorize_text_image, methods=['PUT'])
         self.api.add_api_route('/vectorize_image_corpus', self.handle_vectorize_corpus, methods=['POST'])
-        self.api.add_api_route('/monitor_vectorize_corpus', self.monitor_vectorizer_corpus, response_model=MonitorResponse)
+        self.api.add_api_route('/monitor_vectorize_corpus', self.monitor_vectorizer_corpus, methods=['GET'], response_model=MonitorResponse)
         self.api.add_api_route('/make_image_recommendation', self.handle_make_image_recommendation, methods=['POST'])
         
     async def __handle_sigterm(self):
@@ -138,6 +140,10 @@ class APIServer:
             await self.elasticsearch_client.__aenter__()  # open the es and initialize resources 
             es_info = await self.elasticsearch_client.info()
             logger.info(es_info)
+            index_was_found = await self.check_index(self.index_name)
+            if not index_was_found or self.reset_index:  # create the index
+                await self.handle_index_creation(self.index_name)
+            
         except Exception as e:
             logger.error(e)
             logger.info('SIGTERM will be raised')
@@ -152,7 +158,6 @@ class APIServer:
 
         self.ctx.term()
         await self.elasticsearch_client.__aexit__()  # close the es and all resources 
-
         logger.info('server has stopped its running loop')
 
     async def loop(self, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, path2index_schema:str):
@@ -231,9 +236,9 @@ class APIServer:
         logger.info(f'{index_name} was not found in the ES')
         return False  
     
-    async def handle_index_inspection(self, index_name:str):
-        text_image_pair_index_name = index_name + '_text_image_pair_index'
-        image_index_name = index_name + '_image_index'
+    async def handle_index_inspection(self):
+        text_image_pair_index_name = self.index_name + '_text_image_pair_index'
+        image_index_name = self.index_name + '_image_index'
 
         try:
             t_res = await self.elasticsearch_client.count(index=text_image_pair_index_name)
@@ -242,7 +247,7 @@ class APIServer:
             return JSONResponse(
                 status_code=200,
                 content={
-                    'index_name': index_name, 
+                    'index_name': self.index_name, 
                     'number_of_items_per_index': {
                         'text_image_pair_index': dict(t_res),
                         'image_index': dict(i_res)
@@ -253,7 +258,7 @@ class APIServer:
             logger.error(e)
             raise HTTPException(
                 status_code=500,
-                detail=f'failed to retrieve info of the index {index_name}'
+                detail=f'failed to retrieve info of the index {self.index_name}'
             )
 
     async def handle_heartbit(self):
@@ -289,41 +294,23 @@ class APIServer:
             detail=f'{path2image} is not a valid path'
         )
 
-    async def handle_index_creation(self, incoming_req:IndexCreateDeletion):
-        text_image_pair_index_name = incoming_req.index_name + '_text_image_pair_index'
-        image_index_name = incoming_req.index_name + '_image_index'
+    async def handle_index_creation(self, index_name:str):
+        text_image_pair_index_name = index_name + '_text_image_pair_index'
+        image_index_name = index_name + '_image_index'
 
         fst = await self.create_index(text_image_pair_index_name, self.es_index_schema['text_image_pair'])
         snd = await self.create_index(image_index_name, self.es_index_schema['image'])
 
-        if fst and snd:
-            return JSONResponse(
-                status_code=200,
-                content=f'{incoming_req.index_name} was created successfully'
-            )
-        
-        raise HTTPException(
-            status_code=500,
-            detail=f'failed to created the index {incoming_req.index_name}'
-        )
+        return fst and snd 
 
-    async def handle_index_deletion(self, incoming_req:IndexCreateDeletion):
-        text_image_pair_index_name = incoming_req.index_name + '_text_image_pair_index'
-        image_index_name = incoming_req.index_name + '_image_index'
+    async def handle_index_deletion(self, index_name:str):
+        text_image_pair_index_name = index_name + '_text_image_pair_index'
+        image_index_name = index_name + '_image_index'
         
         fst = await self.delete_index(text_image_pair_index_name)
         snd = await self.delete_index(image_index_name)
 
-        if fst and snd:
-            return JSONResponse(
-                status_code=200,
-                content=f'{incoming_req.index_name} was deleted successfully'
-            )
-        
-        raise HTTPException(
-            status_code=500,
-            detail=f'failed to delete the index {incoming_req.index_name}'
-        )
+        return fst and snd 
 
     async def perform_vector_search(self, input_vector:List[float], k:int, client: AsyncElasticsearch, index:str, reference:str ,source:List[str]=["id"], dir_ids:List[str]=None):
         task_id = str(uuid4())
@@ -384,15 +371,15 @@ class APIServer:
         task.set_name(f'background-task-{task_id}')
 
         # Build index name 
-        index_states = await self.check_index(incoming_req.index_name)
+        index_states = await self.check_index(self.index_name)
         if not index_states:
             raise HTTPException(
                 status_code=500,
-                detail=f'can not consume index {incoming_req.index_name}. check if this index is on the ES'
+                detail=f'can not consume index {self.index_name}. check if this index is on the ES'
             )
 
-        text_image_pair_index_name = incoming_req.index_name + '_text_image_pair_index'
-        image_index_name = incoming_req.index_name + '_image_index'
+        text_image_pair_index_name = self.index_name + '_text_image_pair_index'
+        image_index_name = self.index_name + '_image_index'
 
         # Encode the incoming text for NLP processing
         txt_topic = b'TEXT'
@@ -489,7 +476,13 @@ class APIServer:
 
         return result
     
-    async def __index_text_and_image(self, index_name:str, text:str, response) -> Union[JSONResponse, HTTPException]:
+    async def __checksum(self, txt_binarystream:bytes, img_binarystream:bytes ) -> str:
+        txt_sha = sha256(txt_binarystream).hexdigest()
+        img_sha = sha256(img_binarystream).hexdigest()
+        return sha256( (txt_sha + img_sha).encode() ).hexdigest()
+
+
+    async def __index_text_and_image(self, index_name:str, text:str, response, doc_id:str) -> Union[JSONResponse, HTTPException]:
           # Build index name 
         text_image_pair_index_name = index_name + '_text_image_pair_index'
       
@@ -503,9 +496,8 @@ class APIServer:
                 'image_vector': img_embedding  # list of images in the next versions 
             }
 
-            id = str(uuid4())
             try:
-                insertion_response = await self.elasticsearch_client.index(
+                _ = await self.elasticsearch_client.index(
                     index=text_image_pair_index_name,
                     id=id,
                     document=document
@@ -513,7 +505,7 @@ class APIServer:
                 return JSONResponse(
                     status_code=200,
                     content={
-                        'id': id,
+                        'id': doc_id,
                     }
                 )
             except Exception as e:
@@ -526,7 +518,7 @@ class APIServer:
         
         return HTTPException(status_code=500, detail='failed to perform embedding on both image and text')
 
-    async def handle_vectorize_text_image(self, index_name:str=Form(...), text:str=Form(...), image_file:UploadFile=File(...)):
+    async def handle_vectorize_text_image(self, text:str=Form(...), image_file:UploadFile=File(...)):
         task_id = str(uuid4())
         task = asyncio.current_task()
         task.set_name(f'background-task-{task_id}')
@@ -534,16 +526,10 @@ class APIServer:
         img_topic = b'IMAGE'
         txt_topic = b'TEXT'
 
-        index_states = await self.check_index(index_name)  # gather is faster than sequential call 
-        if not index_states:
-            raise HTTPException(
-                status_code=500,
-                detail=f'can not consume index {index_name}. check if this index is on the ES'
-            )
-
         try:
             txt_binarystream = text.encode()
             img_binarystream = await image_file.read()
+            doc_id = await self.__checksum(txt_binarystream, img_binarystream)
         except Exception as e:
             error_message = e
             logger.error(f'{task.get_name()} => {error_message}')
@@ -566,7 +552,7 @@ class APIServer:
                 detail=error_message
             )
         
-        returned_val = await self.__index_text_and_image(index_name, text, response)
+        returned_val = await self.__index_text_and_image(self.index_name, text, response, doc_id)
         if isinstance(returned_val, JSONResponse):
             return returned_val
         raise returned_val
@@ -579,7 +565,7 @@ class APIServer:
     async def handle_vectorize_corpus(self, incoming_req:VectorizeImageCorpus, background_tasks:BackgroundTasks):
         
         dir_id = incoming_req.dir_id
-        index_name = incoming_req.index_name 
+        index_name = self.index_name 
         concurrency = incoming_req.concurrency
 
         index_states = await self.check_index(index_name)
@@ -622,7 +608,7 @@ class APIServer:
             detail=f"the path : {path2corpus} is not a valid directory"
         )
     
-    async def synchronize_partitions(self, task_id:str, nb_files:int, nb_workers:int, shared_mutex:asyncio.Lock, signal_event:asyncio.Event):
+    async def synchronize_partitions(self, task_id:str, nb_workers:int, shared_mutex:asyncio.Lock, signal_event:asyncio.Event):
         task = asyncio.current_task()
         task.set_name(f'background-task-{task_id}-synchronizer')
         
@@ -728,7 +714,7 @@ class APIServer:
                     result = pickle.loads(response)  # Tuple[bool, Optional[List[float]]]
                     if result[0] == True:
                         _, filename = path.split(path2file)
-                        insertion_response = await self.elasticsearch_client.index(
+                        _ = await self.elasticsearch_client.index(
                             index=image_index_name,
                             id=filename,
                             document={
@@ -810,9 +796,9 @@ class APIServer:
                 awaitables.append(awt)
 
             nb_workers = len(awaitables)
-            awaitables = [self.synchronize_partitions(task_id, nb_files, nb_workers, shared_mutex, signal_event)] + awaitables
+            awaitables = [self.synchronize_partitions(task_id, nb_workers, shared_mutex, signal_event)] + awaitables
 
-            worker_responses = await asyncio.gather(*awaitables, return_exceptions=True)  
+            _ = await asyncio.gather(*awaitables, return_exceptions=True)  
             async with shared_mutex:
                 if signal_event.is_set():
                     async with self.global_shared_mutex: 
