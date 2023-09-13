@@ -179,8 +179,10 @@ class APIServer:
                 'port': es_port,
                 'scheme': es_scheme 
             }],
-            'basic_auth':es_basic_auth
+            'basic_auth': es_basic_auth  
         }
+
+        
         self.config = uvicorn.Config(app=self.api, host=self.host, port=self.port, root_path=self.mounting_path)
         self.server = uvicorn.Server(self.config)
         await self.server.serve()
@@ -427,7 +429,7 @@ class APIServer:
             scores_acc.append(hit['_score'])
 
         if len(img_embeddings_acc) <= 1:
-            raise HTTPException(status_code=500, detail='Number of neighbors must be greater than 1')
+            raise HTTPException(status_code=500, detail='Number of retrieved neighbors (text-image-index) must be greater than 1')
 
         # Calculate the weighted average of image embeddings based on scores
         stacked_image_embedding = np.vstack(img_embeddings_acc)

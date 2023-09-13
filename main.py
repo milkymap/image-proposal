@@ -20,7 +20,7 @@ from starter import launch_runner, launch_server
 @click.option('--es_host', type=str, envvar='ES_HOST', required=True)
 @click.option('--es_port', type=int, envvar='ES_PORT', required=True)
 @click.option('--es_scheme', type=str, envvar='ES_SCHEME', required=True)
-@click.option('--es_basic_auth', type=str, envvar='ES_BASIC_AUTH', required=True)
+@click.option('--es_basic_auth', type=str, envvar='ES_BASIC_AUTH', default=None)
 @click.option('--path2index_schema', type=click.Path(exists=True, dir_okay=False, file_okay=True), default='es_schema.json')
 
 @click.option('--nlp_model_name', required=True)
