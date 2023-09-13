@@ -23,6 +23,5 @@ def launch_runner(nlp_model_name:str, img_model_name:str, nb_img_workers:int, nb
             nb_workers=nb_nlp_workers
         )
 
-        runner.start_server(server_config=server_config)
-        runner.loop()
+        runner.loop(server_config)
 

@@ -760,10 +760,16 @@ class APIServer:
                 if not signal_event.is_set():
                     signal_event.set()
         
-        await push_socket.send_json({
-            'status': 'stopped',
-            'counter': 0  
-        })
+        try:
+            await asyncio.wait_for(
+                push_socket.send_json({
+                    'status': 'stopped',
+                    'counter': 0  
+                }),
+                timeout=5
+            )
+        except asyncio.TimeoutError:
+            pass 
 
         push_socket.close(linger=0)
         dealer_socket.close(linger=0)

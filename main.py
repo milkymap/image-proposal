@@ -32,8 +32,7 @@ def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, 
     device = 'cuda:0' if th.cuda.is_available() else 'cpu'
     if th.cuda.is_available():
         th.multiprocessing.set_start_method('spawn')
-    
-    logger.info('multiprocessing => start_method set to spawn for cuda')
+        logger.info('multiprocessing => start_method set to spawn for cuda')
     # move server into runner ...! 
     
     server_config = {

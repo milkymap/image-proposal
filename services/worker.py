@@ -1,12 +1,10 @@
 import zmq 
 import signal 
-import pickle 
 
 from log import logger 
-from config import ZMQConfig
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Tuple , Any 
+from typing import Tuple , Any 
 
 class ZMQWorker(ABC):
     def __init__(self):
