@@ -18,8 +18,7 @@ import httpx
 @click.command()
 @click.option('--endpoint')
 @click.option('--path2corpus')
-@click.option('--index_name')
-def main(endpoint:str, path2corpus:str, index_name:str):
+def main(endpoint:str, path2corpus:str):
 
     img_extensions = ['*.jpg', '*.jpeg', '*.png']
     img_paths = []
@@ -43,14 +42,13 @@ def main(endpoint:str, path2corpus:str, index_name:str):
             text = fp.read()
 
         form_data = {
-            "index_name": index_name,
             "text": text 
         }
 
         # Open the image file for reading
         with open(img_path, "rb") as image_file:
             files = {"image_file": (image_file.name, image_file)}
-            response = requests.post(endpoint, data=form_data, files=files)
+            response = requests.put(endpoint, data=form_data, files=files)
             if response.status_code == 200:
                 print(response.content)
             else:

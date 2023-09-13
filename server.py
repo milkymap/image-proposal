@@ -141,9 +141,14 @@ class APIServer:
             es_info = await self.elasticsearch_client.info()
             logger.info(es_info)
             index_was_found = await self.check_index(self.index_name)
-            if not index_was_found or self.reset_index:  # create the index
+            if not index_was_found:
                 await self.handle_index_creation(self.index_name)
-            
+            else:
+                if self.reset_index:
+                    await self.handle_index_deletion(self.index_name)
+                    await self.handle_index_creation(self.index_name)
+
+
         except Exception as e:
             logger.error(e)
             logger.info('SIGTERM will be raised')
@@ -481,7 +486,6 @@ class APIServer:
         img_sha = sha256(img_binarystream).hexdigest()
         return sha256( (txt_sha + img_sha).encode() ).hexdigest()
 
-
     async def __index_text_and_image(self, index_name:str, text:str, response, doc_id:str) -> Union[JSONResponse, HTTPException]:
           # Build index name 
         text_image_pair_index_name = index_name + '_text_image_pair_index'
@@ -499,7 +503,7 @@ class APIServer:
             try:
                 _ = await self.elasticsearch_client.index(
                     index=text_image_pair_index_name,
-                    id=id,
+                    id=doc_id,
                     document=document
                 )
                 return JSONResponse(

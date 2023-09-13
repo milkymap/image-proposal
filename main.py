@@ -37,30 +37,30 @@ def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, 
         logger.info('multiprocessing => start_method set to spawn for cuda')
     # move server into runner ...! 
     
-    server_config = {
-        'host': host,
-        'port': port,
-        'mounting_path': mounting_path,
-        'path2base_dir': path2base_dir,
-        'es_host': es_host,
-        'es_port': es_port,
-        'es_scheme': es_scheme,
-        'es_basic_auth': es_basic_auth,
-        'index_name': index_name,
-        'reset_index': reset_index,
-        'path2index_schema': path2index_schema
+    runner_config = {
+        "device": device,
+        "chunk_size": chunk_size,
+        "cache_folder": cache_folder,
+        "nlp_model_name": nlp_model_name,
+        "img_model_name": img_model_name,
+        "nb_nlp_workers": nb_nlp_workers,
+        "nb_img_workers": nb_img_workers,
+        "server_config": {
+            'host': host,
+            'port': port,
+            'mounting_path': mounting_path,
+            'path2base_dir': path2base_dir,
+            'es_host': es_host,
+            'es_port': es_port,
+            'es_scheme': es_scheme,
+            'es_basic_auth': es_basic_auth,
+            'index_name': index_name,
+            'reset_index': reset_index,
+            'path2index_schema': path2index_schema
+        }
     }
-    
-    launch_runner(
-        nlp_model_name=nlp_model_name,
-        img_model_name=img_model_name,
-        nb_nlp_workers=nb_nlp_workers,
-        nb_img_workers=nb_img_workers,
-        cache_folder=cache_folder,
-        device=device,
-        chunk_size=chunk_size,
-        server_config=server_config
-    )
+
+    launch_runner(**runner_config)
 
     logger.info('... END ...')
 
