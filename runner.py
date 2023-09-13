@@ -17,11 +17,17 @@ class ZMQRunner:
     def __init__(self):
         self.services:List[Tuple[str, Type[ZMQWorker], str, Dict[str, Any]], int] = []
         self.topics_acc:List[List[str]] = []
+        self.processes:List[mp.Process] = []
 
     def __handle_termination_signal(self, signal_num:int, frame:str):
-        logger.warning(f'runner has received the SIGTERM signal')
+        logger.warning('runner has received the SIGTERM signal')
+        logger.warning('runner will destroy all processes [broker] and [workers...]')
+        for prs in self.processes:
+            if prs.exitcode is None:
+                prs.terminate()
+                prs.join()
+        
         signal.raise_signal(signal.SIGINT)
-        logger.info('runner has raised the SIGINT')
 
     def __initialize_signal_handler(self):
         signal.signal(
@@ -44,35 +50,33 @@ class ZMQRunner:
         broker_ = mp.Process(target=self.launch_broker)
         broker_.start()
 
-        processes = [broker_]
+        self.processes.append(broker_)
         for name, builder, switch_id, kwargs, nb_workers in self.services:
             for worker_id in range(nb_workers):
                 worker_ = mp.Process(
                     target=self.launch_worker,
                     args=(builder, kwargs, f'{name}-{worker_id:03d}', switch_id)
                 )
-                processes.append(worker_)
-                processes[-1].start()
+                self.processes.append(worker_)
+                self.processes[-1].start()
         
         keep_loop = True 
         while keep_loop:
             try:
-                process_states = [prs.exitcode is not None for prs in processes]
+                process_states = [prs.exitcode is not None for prs in self.processes]
                 if any(process_states):
                     keep_loop = False 
             except KeyboardInterrupt:
                 logger.warning('runner will quit its loop')
-                for prs in processes:
-                    if prs.exitcode is None:
-                        prs.terminate()
-                        prs.join()
+                for prs in self.processes:
+                    prs.join()
                 keep_loop = False 
             except Exception as e:
                 logger.error(e)
                 keep_loop = False 
         
         logger.info('runner is waiting for worker to exit')
-        for prs in processes:
+        for prs in self.processes:
             if prs.exitcode is None:
                 prs.terminate()
                 prs.join()
