@@ -476,7 +476,7 @@ class APIServer:
             
         try:
             await dealer_socket.send_multipart([b'', topic, binarystream])
-            _, resp = await asyncio.wait_for(dealer_socket.recv_multipart(), timeout=10)
+            _, resp = await asyncio.wait_for(dealer_socket.recv_multipart(), timeout=60)
             result = pickle.loads(resp)  # Tuple[bool, Optional[List[float]]]
         except asyncio.TimeoutError:
             logger.error(f'{task.get_name()} => has timedout ...!')
