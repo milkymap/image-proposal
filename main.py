@@ -19,7 +19,6 @@ from starter import launch_runner
 @click.option('--es_scheme', type=str, envvar='ES_SCHEME', required=True)
 @click.option('--es_basic_auth', type=str, envvar='ES_BASIC_AUTH', default=None)
 @click.option('--index_name', type=str, required=True)
-@click.option('--reset_index/--no-reset_index', type=bool, default=False)
 @click.option('--path2index_schema', type=click.Path(exists=True, dir_okay=False, file_okay=True), default='es_schema.json')
 
 @click.option('--nlp_model_name', required=True)
@@ -29,7 +28,7 @@ from starter import launch_runner
 @click.option('--chunk_size', type=int, default=128)
 @click.option('--cache_folder', envvar='TRANSFORMERS_CACHE', required=True, type=click.Path(exists=True, file_okay=False))
 @click.option('--protocol_buffers', envvar='PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION', required=True, type=click.Choice(['python']))
-def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, index_name:str, reset_index:bool, path2index_schema:str ,nlp_model_name:str, img_model_name:str, nb_nlp_workers:int, nb_img_workers:int ,chunk_size:int, cache_folder:str, protocol_buffers:str):
+def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, index_name:str, path2index_schema:str ,nlp_model_name:str, img_model_name:str, nb_nlp_workers:int, nb_img_workers:int ,chunk_size:int, cache_folder:str, protocol_buffers:str):
     
     device = 'cuda:0' if th.cuda.is_available() else 'cpu'
     if th.cuda.is_available():
@@ -55,7 +54,6 @@ def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, 
             'es_scheme': es_scheme,
             'es_basic_auth': es_basic_auth,
             'index_name': index_name,
-            'reset_index': reset_index,
             'path2index_schema': path2index_schema
         }
     }

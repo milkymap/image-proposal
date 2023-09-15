@@ -34,17 +34,17 @@ from typing import List, Tuple, Dict, Optional, Any, Union
 from elasticsearch import AsyncElasticsearch, exceptions
 
 from PIL import Image 
+from libraries.strategies import create_grid
 
 import resource
 
 class APIServer:
     __PATH2MEMORIES = 'map_task_id2task_data.pkl'
-    def __init__(self, host:str, port:int, path2base_dir:str, index_name:str, reset_index:bool=False, number_opened_file_limit:int=8196, mounting_path:str="/"):
+    def __init__(self, host:str, port:int, path2base_dir:str, index_name:str, number_opened_file_limit:int=8196, mounting_path:str="/"):
         self.host = host 
         self.port = port 
 
         self.index_name = index_name
-        self.reset_index = reset_index
         self.path2base_dir = path2base_dir
 
         self.number_opened_file_limit = number_opened_file_limit
@@ -97,6 +97,7 @@ class APIServer:
         self.api.add_api_route('/heartbit', self.handle_heartbit)
         self.api.add_api_route('/get_image', self.handle_get_image)
         
+        self.api.add_api_route('/reset_index', self.handle_reset_index, methods=['POST'])
         self.api.add_api_route('/inspect_index', self.handle_index_inspection, methods=['GET'])
 
         self.api.add_api_route('/add_knowledge', self.handle_vectorize_text_image, methods=['PUT'])
@@ -143,12 +144,7 @@ class APIServer:
             index_was_found = await self.check_index(self.index_name)
             if not index_was_found:
                 await self.handle_index_creation(self.index_name)
-            else:
-                if self.reset_index:
-                    await self.handle_index_deletion(self.index_name)
-                    await self.handle_index_creation(self.index_name)
-
-
+                    
         except Exception as e:
             logger.error(e)
             logger.info('SIGTERM will be raised')
@@ -241,6 +237,22 @@ class APIServer:
         logger.info(f'{index_name} was not found in the ES')
         return False  
     
+    async def handle_reset_index(self):
+        try:
+            await self.handle_index_deletion(self.index_name)
+            await self.handle_index_creation(self.index_name)
+            return JSONResponse(
+                status_code=200,
+                content={
+                    'message': 'index was resetted successfully'
+                }
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f'can not reset index => {e}'
+            )
+
     async def handle_index_inspection(self):
         text_image_pair_index_name = self.index_name + '_text_image_pair_index'
         image_index_name = self.index_name + '_image_index'
@@ -369,7 +381,7 @@ class APIServer:
             logger.error(e)
             return None
 
-    async def handle_make_image_recommendation(self, incoming_req: ImageRecommendation):
+    async def handle_make_image_recommendation(self, to_image:bool, incoming_req: ImageRecommendation):
         # Generate a unique task ID and set the task name
         task_id = str(uuid4())
         task = asyncio.current_task()
@@ -417,6 +429,8 @@ class APIServer:
         scores_acc = []
         img_embeddings_acc = []
         for hit in hits:
+            print(hit['_score'])
+            print(hit['_source']['text'], end='\n\n')
             img_embeddings_acc.append(hit['_source']['image_vector'])
             scores_acc.append(hit['_score'])
 
@@ -454,6 +468,25 @@ class APIServer:
             })
 
         # Return the image IDs as JSON response
+
+        if to_image:
+            acc = []
+            for item in image_ids:
+                path2image = path.join(self.path2base_dir, item['dir_id'], item['id'])
+                pil_image = Image.open(path2image)
+                resized_image = pil_image.resize((256, 256))
+                acc.append(resized_image)
+    
+            pil_image = create_grid(acc)
+            binarystream_handler = BytesIO()
+            pil_image.save(binarystream_handler, "JPEG")
+            binarystream_handler.seek(0)  # rewind the file pointer
+                
+            return StreamingResponse(
+                binarystream_handler,
+                media_type='image/jpeg'
+            )
+
         return JSONResponse(status_code=200, content={'image_ids': image_ids})
 
     async def topic_handler(self, topic:bytes, binarystream:bytes) -> Tuple[bool, Optional[List[float]]]:
