@@ -25,7 +25,7 @@ from fastapi import FastAPI
 from fastapi import BackgroundTasks, HTTPException, UploadFile, Form, File 
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from apischema import ImageRecommendation, TaskStatus, MonitorContent, MonitorResponse, VectorizeImageCorpus
+from apischema import ImageRecommendation, TaskStatus, MonitorContent, MonitorResponse, VectorizeImageCorpus, AggregationType
 from config import ZMQConfig
 from log import logger 
 
@@ -381,7 +381,7 @@ class APIServer:
             logger.error(e)
             return None
 
-    async def handle_make_image_recommendation(self, to_image:bool, incoming_req: ImageRecommendation):
+    async def handle_make_image_recommendation(self, to_image:bool, aggregation_type:AggregationType, incoming_req: ImageRecommendation):
         # Generate a unique task ID and set the task name
         task_id = str(uuid4())
         task = asyncio.current_task()
@@ -434,40 +434,77 @@ class APIServer:
             img_embeddings_acc.append(hit['_source']['image_vector'])
             scores_acc.append(hit['_score'])
 
-        if len(img_embeddings_acc) <= 1:
+        if len(img_embeddings_acc) <= 1:  # change this into : < 1
             raise HTTPException(status_code=500, detail='Number of retrieved neighbors (text-image-index) must be greater than 1')
 
-        # Calculate the weighted average of image embeddings based on scores
-        stacked_image_embedding = np.vstack(img_embeddings_acc)
-        stacked_scores = np.array(scores_acc)[:, None]
-        stacked_scores = stacked_scores / (np.sum(stacked_scores) + 1e-12)
-        img_embedding = np.mean(stacked_image_embedding * stacked_scores, axis=0)
+        if aggregation_type == AggregationType.BEFORE_RETRIEVAL:
+            # Calculate the weighted average of image embeddings based on scores
+            stacked_image_embedding = np.vstack(img_embeddings_acc)
+            stacked_scores = np.array(scores_acc)[:, None]
+            stacked_scores = stacked_scores / (np.sum(stacked_scores) + 1e-12)
+            img_embedding = np.mean(stacked_image_embedding * stacked_scores, axis=0)
 
-        # Perform vector search on the image index
-        image_search_response = await self.perform_vector_search(
-            input_vector=img_embedding,
-            k=incoming_req.image_nb_neighbors,
-            client=self.elasticsearch_client,
-            index=image_index_name,
-            reference="'vector'",
-            source=["dir_id"],
-            dir_ids=incoming_req.dir_ids
-        )
+            # Perform vector search on the image index
+            image_search_response = await self.perform_vector_search(
+                input_vector=img_embedding,
+                k=incoming_req.image_nb_neighbors,
+                client=self.elasticsearch_client,
+                index=image_index_name,
+                reference="'vector'",
+                source=["dir_id"],
+                dir_ids=incoming_req.dir_ids
+            )
 
-        if image_search_response is None:
-            raise HTTPException(status_code=500, detail='Failed to search in the image index')
+            if image_search_response is None:
+                raise HTTPException(status_code=500, detail='Failed to search in the image index')
 
-        # Extract relevant information from the image search results
-        hits = image_search_response['hits']['hits']
-        image_ids = []
-        for hit in hits:
-            image_ids.append({
-                'id': hit['_id'],
-                'dir_id': hit['_source']['dir_id'],
-                'score': hit['_score']
-            })
+            # Extract relevant information from the image search results
+            hits = image_search_response['hits']['hits']
+            image_ids = []
+            for hit in hits:
+                image_ids.append({
+                    'id': hit['_id'],
+                    'dir_id': hit['_source']['dir_id'],
+                    'score': hit['_score']
+                })
 
-        # Return the image IDs as JSON response
+            # Return the image IDs as JSON response
+
+        if aggregation_type == AggregationType.AFTER_RETRIEVAL:
+            awaitables = []
+            for neighbor_emb in img_embeddings_acc:
+                awt =  self.perform_vector_search(
+                    input_vector=neighbor_emb,
+                    k=incoming_req.image_nb_neighbors,
+                    client=self.elasticsearch_client,
+                    index=image_index_name,
+                    reference="'vector'",
+                    source=["dir_id"],
+                    dir_ids=incoming_req.dir_ids
+                )
+                awaitables.append(awt)
+
+            
+            gather_response = await asyncio.gather(*awaitables)
+            if any([rsp is None for rsp in gather_response]):
+                raise HTTPException(status_code=500, detail='Failed to search in the image index')
+            
+            scores_acc = np.array(scores_acc) 
+            normalized_scores_acc = scores_acc / (np.sum(scores_acc) + 1e-8)
+            image_ids = []
+            limit = incoming_req.image_nb_neighbors
+
+            for image_search_response, prob in zip(gather_response, normalized_scores_acc):
+                hits = image_search_response['hits']['hits']
+                nb_hits = round(prob * limit) 
+                for hit in hits[:nb_hits]:
+                    image_ids.append({
+                        'id': hit['_id'],
+                        'dir_id': hit['_source']['dir_id'],
+                        'score': hit['_score']
+                    })
+                
+            image_ids = image_ids[:limit]
 
         if to_image:
             acc = []
@@ -555,7 +592,12 @@ class APIServer:
         
         return HTTPException(status_code=500, detail='failed to perform embedding on both image and text')
 
-    async def handle_vectorize_text_image(self, text:str=Form(...), image_file:UploadFile=File(...)):
+    async def handle_vectorize_text_image(self, text_file:UploadFile=File(...), image_file:UploadFile=File(...)):
+        # change text into UploadedFile
+        # image_files instead of image_file because an article can be illustrated by severals images 
+        # image_files can be empty, create a null vector [0, 0, ..., 0] with DIM=MODEL_DIM
+        # for the clip-ViT-L-14 model, DIM=768
+
         task_id = str(uuid4())
         task = asyncio.current_task()
         task.set_name(f'background-task-{task_id}')
@@ -564,7 +606,7 @@ class APIServer:
         txt_topic = b'TEXT'
 
         try:
-            txt_binarystream = text.encode()
+            txt_binarystream = await text_file.read()
             img_binarystream = await image_file.read()
             doc_id = await self.__checksum(txt_binarystream, img_binarystream)
         except Exception as e:
@@ -589,6 +631,7 @@ class APIServer:
                 detail=error_message
             )
         
+        text = txt_binarystream.decode()
         returned_val = await self.__index_text_and_image(self.index_name, text, response, doc_id)
         if isinstance(returned_val, JSONResponse):
             return returned_val

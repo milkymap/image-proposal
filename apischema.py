@@ -32,3 +32,7 @@ class MonitorResponse(BaseModel):
 class VectorizeImageCorpus(BaseModel):
     dir_id:str
     concurrency:int=2
+
+class AggregationType(str, Enum):
+    AFTER_RETRIEVAL:str='AFTER_RETRIEVAL'
+    BEFORE_RETRIEVAL:str='BEFORE_RETRIEVAL'
