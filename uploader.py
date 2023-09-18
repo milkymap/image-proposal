@@ -38,21 +38,15 @@ def main(endpoint:str, path2corpus:str):
     for img_path in img_paths:
         extension = img_path.split('.')[-1]
         txt_path = img_path.replace(extension, 'txt')
-        with open(txt_path, mode='r') as fp:
-            text = fp.read()
-
-        form_data = {
-            "text": text 
-        }
-
-        # Open the image file for reading
-        with open(img_path, "rb") as image_file:
-            files = {"image_file": (image_file.name, image_file)}
-            response = requests.put(endpoint, data=form_data, files=files)
-            if response.status_code == 200:
-                print(response.content)
-            else:
-                print(txt_path)
+        with open(txt_path, mode='r') as text_fp:
+            # Open the image file for reading
+            with open(img_path, "rb") as image_fp:
+                files = {"image_file": (image_fp.name, image_fp), "text_file": (text_fp.name, text_fp)}
+                response = requests.put(endpoint, files=files)
+                if response.status_code == 200:
+                    print(response.content)
+                else:
+                    print(txt_path)
 
         print('\n')
 

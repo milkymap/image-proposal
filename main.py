@@ -18,8 +18,12 @@ from starter import launch_runner
 @click.option('--es_port', type=int, envvar='ES_PORT', required=True)
 @click.option('--es_scheme', type=str, envvar='ES_SCHEME', required=True)
 @click.option('--es_basic_auth', type=str, envvar='ES_BASIC_AUTH', default=None)
-@click.option('--index_name', type=str, required=True)
 @click.option('--path2index_schema', type=click.Path(exists=True, dir_okay=False, file_okay=True), default='es_schema.json')
+
+@click.option('--knowledge_index_name', type=str, required=True)
+@click.option('--image_index_name', type=str, required=True)
+@click.option('--nb_shards_for_knowledge_index', envvar='NB_SHARDS_FOR_KNOWLEDGE_INDEX', required=True, type=int)
+@click.option('--nb_shards_for_image_index', envvar='NB_SHARDS_FOR_IMAGE_INDEX', required=True, type=int)
 
 @click.option('--nlp_model_name', required=True)
 @click.option('--img_model_name', required=True)
@@ -28,7 +32,7 @@ from starter import launch_runner
 @click.option('--chunk_size', type=int, default=128)
 @click.option('--cache_folder', envvar='TRANSFORMERS_CACHE', required=True, type=click.Path(exists=True, file_okay=False))
 @click.option('--protocol_buffers', envvar='PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION', required=True, type=click.Choice(['python']))
-def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, index_name:str, path2index_schema:str ,nlp_model_name:str, img_model_name:str, nb_nlp_workers:int, nb_img_workers:int ,chunk_size:int, cache_folder:str, protocol_buffers:str):
+def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, path2index_schema:str, knowledge_index_name:str, image_index_name:str, nb_shards_for_knowledge_index:int, nb_shards_for_image_index:int, nlp_model_name:str, img_model_name:str, nb_nlp_workers:int, nb_img_workers:int ,chunk_size:int, cache_folder:str, protocol_buffers:str):
     
     device = 'cuda:0' if th.cuda.is_available() else 'cpu'
     if th.cuda.is_available():
@@ -53,7 +57,10 @@ def main(host:str, port:int, mounting_path:str, path2base_dir:str, es_host:str, 
             'es_port': es_port,
             'es_scheme': es_scheme,
             'es_basic_auth': es_basic_auth,
-            'index_name': index_name,
+            'knowledge_index_name': knowledge_index_name,
+            'image_index_name': image_index_name,
+            'nb_shards_for_knowledge_index': nb_shards_for_knowledge_index,
+            'nb_shards_for_image_index': nb_shards_for_image_index,
             'path2index_schema': path2index_schema
         }
     }

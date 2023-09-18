@@ -79,12 +79,12 @@ class ZMQRunner:
             worker.before_loop(worker_id, switch_id)
             worker.loop()
     
-    def launch_server(self, host:str, port:int, mounting_path:str, index_name:str, path2base_dir:str, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, path2index_schema:str):
-        async def start_server(host:str, port:int, index_name:str, path2base_dir:str, mounting_path:str):
-            async with APIServer(host=host, port=port, path2base_dir=path2base_dir, index_name=index_name, number_opened_file_limit=8192, mounting_path=mounting_path) as server:
+    def launch_server(self, host:str, port:int, mounting_path:str, knowledge_index_name:str, image_index_name:str, nb_shards_for_knowledge_index:int, nb_shards_for_image_index:int, path2base_dir:str, es_host:str, es_port:int, es_scheme:str, es_basic_auth:str, path2index_schema:str):
+        async def start_server():
+            async with APIServer(host=host, port=port, path2base_dir=path2base_dir, knowledge_index_name=knowledge_index_name, image_index_name=image_index_name, nb_shards_for_knowledge_index=nb_shards_for_knowledge_index, nb_shards_for_image_index=nb_shards_for_image_index , number_opened_file_limit=8192, mounting_path=mounting_path) as server:
                 await server.loop(es_host, es_port, es_scheme, es_basic_auth, path2index_schema)
         
-        asyncio.run(start_server(host, port, index_name, path2base_dir, mounting_path))
+        asyncio.run(start_server())
 
 
     def __enter__(self):
