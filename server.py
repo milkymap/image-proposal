@@ -105,7 +105,10 @@ class APIServer:
         self.api.add_api_route('/reset_index', self.handle_reset_index, methods=['POST'])
         self.api.add_api_route('/inspect_index', self.handle_index_inspection, methods=['GET'])
 
-        self.api.add_api_route('/add_knowledge', self.handle_vectorize_text_image, methods=['PUT'])
+        self.api.add_api_route('/add_knowledge/{knowledge_id}', self.handle_vectorize_text_image, methods=['PUT'])
+        self.api.add_api_route('/del_knowledge/{knowledge_id}', self.handle_knowledge_deletion, methods=['DELETE'])
+        
+        
         self.api.add_api_route('/vectorize_image_corpus', self.handle_vectorize_corpus, methods=['POST'])
         self.api.add_api_route('/monitor_vectorize_corpus', self.monitor_vectorizer_corpus, methods=['GET'], response_model=MonitorResponse)
         self.api.add_api_route('/make_image_recommendation', self.handle_make_image_recommendation, methods=['POST'])
@@ -562,7 +565,7 @@ class APIServer:
         img_sha = sha256(img_binarystream).hexdigest()
         return sha256( (txt_sha + img_sha).encode() ).hexdigest()
 
-    async def __index_text_and_image(self, text:str, response, doc_id:str) -> Union[JSONResponse, HTTPException]:
+    async def __index_text_and_image(self, text:str, response:Tuple[bool, Optional[List[float]]], doc_id:str) -> Union[JSONResponse, HTTPException]:
           # Build index name 
         knowledge_index_name = self.knowledge_index_name
       
@@ -598,7 +601,7 @@ class APIServer:
         
         return HTTPException(status_code=500, detail='failed to perform embedding on both image and text')
 
-    async def handle_vectorize_text_image(self, text_file:UploadFile=File(...), image_file:UploadFile=File(...)):
+    async def handle_vectorize_text_image(self, knowledge_id:str, text_file:UploadFile=File(...), image_file:UploadFile=File(...)):
         task_id = str(uuid4())
         task = asyncio.current_task()
         task.set_name(f'background-task-{task_id}')
@@ -609,7 +612,7 @@ class APIServer:
         try:
             txt_binarystream = await text_file.read()
             img_binarystream = await image_file.read()
-            doc_id = await self.__checksum(txt_binarystream, img_binarystream)
+            doc_id = knowledge_id # await self.__checksum(txt_binarystream, img_binarystream)
         except Exception as e:
             error_message = e
             logger.error(f'{task.get_name()} => {error_message}')
@@ -637,6 +640,31 @@ class APIServer:
         if isinstance(returned_val, JSONResponse):
             return returned_val
         raise returned_val
+    
+    async def handle_knowledge_deletion(self, knowledge_id:str):
+        task_id = str(uuid4())
+        task = asyncio.current_task()
+        task.set_name(f'background-task-{task_id}')
+
+        try:
+            _ = await self.elasticsearch_client.delete(
+                index=self.knowledge_index_name,
+                id=knowledge_id
+            )
+            return JSONResponse(
+                status_code=200,
+                content={
+                    'id': knowledge_id,
+                    'message': 'this item was deleted successfully'
+                }
+            )
+        except Exception as e:
+            error_message = e
+            logger.error(f'{error_message}')
+            return HTTPException(
+                status_code=500,
+                detail=error_message
+            )
     
     async def monitor_vectorizer_corpus(self, task_id:str):
         async with self.global_shared_mutex:
