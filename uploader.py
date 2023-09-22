@@ -14,6 +14,9 @@ from log import logger
 import asyncio 
 import httpx
 
+from hashlib import sha256
+
+from os import path 
 
 @click.command()
 @click.option('--endpoint')
@@ -41,13 +44,14 @@ def main(endpoint:str, path2corpus:str):
         with open(txt_path, mode='r') as text_fp:
             # Open the image file for reading
             with open(img_path, "rb") as image_fp:
+                knowledge_id = sha256( (txt_path + img_path).encode() ).hexdigest()
                 files = {"image_file": (image_fp.name, image_fp), "text_file": (text_fp.name, text_fp)}
-                response = requests.put(endpoint, files=files)
+                response = requests.put(path.join(endpoint, knowledge_id), files=files)
                 if response.status_code == 200:
                     print(response.content)
                 else:
                     print(txt_path)
-
+        
         print('\n')
 
 if __name__ == '__main__':

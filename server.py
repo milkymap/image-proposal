@@ -105,6 +105,7 @@ class APIServer:
         self.api.add_api_route('/reset_index', self.handle_reset_index, methods=['POST'])
         self.api.add_api_route('/inspect_index', self.handle_index_inspection, methods=['GET'])
 
+        self.api.add_api_route('/get_knowledge/{knowledge_id}', self.handle_knowledge_retrieval, methods=['GET'])
         self.api.add_api_route('/add_knowledge/{knowledge_id}', self.handle_vectorize_text_image, methods=['PUT'])
         self.api.add_api_route('/del_knowledge/{knowledge_id}', self.handle_knowledge_deletion, methods=['DELETE'])
         
@@ -431,18 +432,21 @@ class APIServer:
         )
 
         if knowledge_search_response is None:
-            raise HTTPException(status_code=500, detail='Failed to search in knowledge index')
+            raise HTTPException(status_code=500, detail='Failed to search into the knowledge index')
 
         # Extract image embeddings and scores from the search results
         hits = knowledge_search_response['hits']['hits']
+        
+        kids_acc = []
+        texts_acc = []
         scores_acc = []
         img_embeddings_acc = []
         for hit in hits:
-            print(hit['_score'])
-            print(hit['_source']['text'], end='\n\n')
-            img_embeddings_acc.append(hit['_source']['image_vector'])
+            kids_acc.append(hit['_id'])
+            texts_acc.append(hit['_source']['text'])
             scores_acc.append(hit['_score'])
-
+            img_embeddings_acc.append(hit['_source']['image_vector'])
+            
         if len(img_embeddings_acc) <= 1:  # change this into : < 1
             raise HTTPException(status_code=500, detail='Number of retrieved neighbors (text-image-index) must be greater than 1')
 
@@ -533,7 +537,17 @@ class APIServer:
                 media_type='image/jpeg'
             )
 
-        return JSONResponse(status_code=200, content={'image_ids': image_ids})
+        zipped_text_score = list(zip(texts_acc, scores_acc))
+        zipped_text_score = [ {'text': txt, 'score': scr} for txt,scr in zipped_text_score ]
+        knowledge_context = dict(list(zip(kids_acc, zipped_text_score)))
+
+        return JSONResponse(
+            status_code=200, 
+            content={
+                'knowledge_context': knowledge_context,
+                'image_ids': image_ids
+            }
+        )
 
     async def topic_handler(self, topic:bytes, binarystream:bytes) -> Tuple[bool, Optional[List[float]]]:
         task_id = str(uuid4())
@@ -661,10 +675,42 @@ class APIServer:
         except Exception as e:
             error_message = e
             logger.error(f'{error_message}')
-            return HTTPException(
+            raise HTTPException(
                 status_code=500,
-                detail=error_message
+                detail=f'can not remove item with id {knowledge_id}'
             )
+        
+    
+    async def handle_knowledge_retrieval(self, knowledge_id:str):
+        task_id = str(uuid4())
+        task = asyncio.current_task()
+        task.set_name(f'background-task-{task_id}')
+
+        try:
+            knowledge_item = await self.elasticsearch_client.get(
+                index=self.knowledge_index_name,
+                id=knowledge_id
+            )
+            
+            print(knowledge_item['_source'].keys())
+
+            return JSONResponse(
+                status_code=200,
+                content={
+                    'id': knowledge_id,
+                    'message': 'this item was retrieved successfully',
+                    'item_content': knowledge_item['_source']
+                }
+            )
+        except Exception as e:
+            error_message = e
+            logger.error(f'{error_message}')
+            raise HTTPException(
+                status_code=500,
+                detail=f'can not retrieve item with id {knowledge_id}'
+            )
+    
+
     
     async def monitor_vectorizer_corpus(self, task_id:str):
         async with self.global_shared_mutex:
@@ -701,7 +747,7 @@ class APIServer:
             else:
                 raise HTTPException(
                     status_code=500,
-                    detail=task_data.model_dump_json()
+                    detail=task_data.dict()
                 )
         raise HTTPException(
             status_code=500,
